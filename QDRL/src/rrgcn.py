@@ -402,7 +402,29 @@ class RecurrentRGCN(nn.Module):
             return history_emb, static_emb, static_remb, self.hr, his_emb, his_r_emb, his_rel_embs
 
         elif self.pre_type=="GRU":
-            pass
+            history_embs = []
+            for i, g in enumerate(g_list):
+                g = g.to(self.gpu)
+                current_h = self.rgcn.forward(g, self.h, [self.emb_rel, self.emb_rel])
+                '''
+                我认为self.h 应该用static_entity_embs的表示
+                current_h = self.rgcn.forward(g, static_entity_embs, [self.emb_rel, self.emb_rel])
+                '''
+                current_h = F.normalize(current_h) if self.layer_norm else current_h
+                if i == 0:
+                    self.h_0 = self.entity_cell(current_h, self.h)    # 第1层输入
+                    self.h_0 = F.normalize(self.h_0) if self.layer_norm else self.h_0
+                else:
+                    self.h_0 = self.entity_cell(current_h, self.h_0)  # 第2层输出==下一时刻第一层输入
+                    self.h_0 = F.normalize(self.h_0) if self.layer_norm else self.h_0
+                history_embs.append(self.h_0)
+                self.hr = F.normalize(self.emb_rel) if self.layer_norm else self.emb_rel
+                his_rel_embs.append(self.hr)
+                self.h = self.h_0
+            history_emb = history_embs[-1]
+
+            return history_emb, static_emb, static_remb, self.hr, his_emb, his_r_emb, his_rel_embs
+
 
 
     def predict(self,que_pair, sub_graph, T_id, test_graph, num_rels, static_graph, test_triples, use_cuda):
